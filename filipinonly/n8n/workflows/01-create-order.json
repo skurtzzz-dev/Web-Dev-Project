@@ -1,0 +1,131 @@
+{
+  "name": "FilipinOnly - 01 Create Order",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "filipinonly-order-create",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "4bc5d961-c7b2-4a76-840b-0dc8be6dab3f",
+      "name": "Create Order Webhook",
+      "webhookId": "4cd3ca4c-c886-42ab-8a8c-814598ba842e"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst required = ['order_number','customer_name','customer_phone','delivery_address'];\nfor (const key of required) {\n  if (!body[key] || String(body[key]).trim() === '') throw new Error(`Missing required field: ${key}`);\n}\nconst fields = ['order_number','created_at','updated_at','customer_name','customer_email','customer_phone','delivery_address','landmark','delivery_type','scheduled_at','payment_method','payment_status','order_status','items_json','receipt_number','status_history_json'];\nconst row = {};\nfor (const key of fields) row[key] = String(body[key] ?? '');\nfor (const key of ['subtotal','discount','delivery_fee','total']) row[key] = Number(body[key] ?? 0);\nreturn [{ json: row }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -450,
+        0
+      ],
+      "id": "5fb5c7d7-d3a2-4091-b3b1-9086442efee0",
+      "name": "Validate and Prepare Order"
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "FilipinOnlyOrders",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "order_number",
+              "condition": "eq",
+              "keyValue": "={{ $json.order_number }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "15c5a77d-960e-4f44-b315-73d59056c491",
+      "name": "Save Order to Data Table"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Order saved in FilipinOnlyOrders.', order_number: $json.order_number } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        120,
+        0
+      ],
+      "id": "759c44c6-75ca-4ed5-a967-b043197f52c9",
+      "name": "Return Saved Order"
+    }
+  ],
+  "connections": {
+    "Create Order Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate and Prepare Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate and Prepare Order": {
+      "main": [
+        [
+          {
+            "node": "Save Order to Data Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Order to Data Table": {
+      "main": [
+        [
+          {
+            "node": "Return Saved Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e4d43577-b6d2-4a72-a36b-16413e8f3021",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "name": "FilipinOnly - 03 List Orders",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "filipinonly-order-list",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "5a0e0ddf-9f67-4e2c-b2df-f8f4c0089379",
+      "name": "List Orders Webhook",
+      "webhookId": "b3c75e23-c40f-49c8-a225-582d45e82e35"
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "FilipinOnlyOrders",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "order_number",
+              "condition": "isNotEmpty"
+            }
+          ]
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -350,
+        0
+      ],
+      "id": "f1d43442-a9f4-42cb-ae02-792604dcb788",
+      "name": "Get All Orders",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, orders: $input.all().filter(item => item.json.order_number).map(item => item.json) } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "467fa710-91a7-4403-a513-81a59a8f7636",
+      "name": "Return Orders"
+    }
+  ],
+  "connections": {
+    "List Orders Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get All Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Orders": {
+      "main": [
+        [
+          {
+            "node": "Return Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b16d76e7-0be6-4322-b98d-1fc6ac92e213",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
