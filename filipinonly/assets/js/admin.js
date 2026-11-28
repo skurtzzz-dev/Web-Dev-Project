@@ -11,7 +11,7 @@
     if(!response.ok || !data.ok) throw new Error(data.message || 'Request failed.');
     return data;
   }
-  function showMessage(text,isError=false){message.textContent=text;message.classList.toggle('error',isError);message.hidden=false;}
+  function showMessage(text,isError=false){if(isError)window.FilipinOnlySound?.error();message.textContent=text;message.classList.toggle('error',isError);message.hidden=false;}
   async function loadOrders(){
     body.innerHTML='<tr><td colspan="8">Loading orders…</td></tr>';
     try{
@@ -20,8 +20,8 @@
       document.getElementById('lastUpdated').textContent=`Updated ${new Date().toLocaleTimeString()}`;
       if(!data.orders.length){body.innerHTML='<tr><td colspan="8" class="admin-empty">No orders yet. Place a test order from the storefront.</td></tr>';return;}
       body.innerHTML=data.orders.map(order=>{
-        const items=(order.items||[]).map(item=>`${Number(item.qty||1)} × ${esc(item.name)}`).join('<br>');
-        return `<tr><td><strong>${esc(order.id)}</strong><small>${esc(order.created_at||'')}</small></td><td><strong>${esc(order.name)}</strong><small>${esc(order.phone)}</small><small>${esc(order.email)}</small></td><td>${items}</td><td><strong>${money(order.total)}</strong><small>${esc(order.payment_status)}</small></td><td>${esc(order.payment)}</td><td><span class="mode-chip">${esc(order.status)}</span></td><td><select class="admin-status" data-status-for="${esc(order.id)}"><option ${order.status==='Order received'?'selected':''}>Order received</option><option ${order.status==='Preparing'?'selected':''}>Preparing</option><option ${order.status==='On the way'?'selected':''}>On the way</option><option ${order.status==='Delivered'?'selected':''}>Delivered</option></select><button class="admin-action" data-save-status="${esc(order.id)}">Save</button></td><td><a class="admin-receipt" target="_blank" rel="noopener" href="receipt.php?id=${encodeURIComponent(order.id)}">View receipt ↗</a></td></tr>`;
+        const items=(order.items||[]).map(item=>`${Number(item.qty||1)} × ${esc(item.name)}${item.serving?` <small>(${esc(item.serving)})</small>`:''}`).join('<br>');
+        return `<tr><td><strong>${esc(order.id)}</strong><small>${esc(order.created_at||'')}</small></td><td><strong>${esc(order.name)}</strong><small>${esc(order.phone)}</small><small>${esc(order.email)}</small></td><td>${items}</td><td><strong>${money(order.total)}</strong><small>${esc(order.payment_status)}</small></td><td>${esc(order.payment)}</td><td><span class="mode-chip">${esc(order.status)}</span></td><td><select class="admin-status" data-status-for="${esc(order.id)}"><option ${order.status==='Order received'?'selected':''}>Order received</option><option ${order.status==='Preparing'?'selected':''}>Preparing</option><option ${order.status==='On the way'?'selected':''}>On the way</option><option ${order.status==='Delivered'?'selected':''}>Delivered</option><option ${order.status==='Cancelled'?'selected':''}>Cancelled</option></select><button class="admin-action" data-save-status="${esc(order.id)}">Save</button></td><td><a class="admin-receipt" target="_blank" rel="noopener" href="receipt.php?id=${encodeURIComponent(order.id)}">View receipt ↗</a></td></tr>`;
       }).join('');
     }catch(error){body.innerHTML=`<tr><td colspan="8" class="admin-empty">${esc(error.message)}</td></tr>`;showMessage(error.message,true);}
   }

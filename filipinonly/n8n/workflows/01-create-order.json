@@ -1,5 +1,5 @@
 {
-  "name": "FilipinOnly - 01 Create Order",
+  "name": "FilipinOnly - 01 Order Created Notification",
   "nodes": [
     {
       "parameters": {
@@ -15,13 +15,13 @@
         0
       ],
       "id": "4bc5d961-c7b2-4a76-840b-0dc8be6dab3f",
-      "name": "Create Order Webhook",
+      "name": "Order Created Webhook",
       "webhookId": "4cd3ca4c-c886-42ab-8a8c-814598ba842e"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst required = ['order_number','customer_name','customer_phone','delivery_address'];\nfor (const key of required) {\n  if (!body[key] || String(body[key]).trim() === '') throw new Error(`Missing required field: ${key}`);\n}\nconst fields = ['order_number','created_at','updated_at','customer_name','customer_email','customer_phone','delivery_address','landmark','delivery_type','scheduled_at','payment_method','payment_status','order_status','items_json','receipt_number','status_history_json'];\nconst row = {};\nfor (const key of fields) row[key] = String(body[key] ?? '');\nfor (const key of ['subtotal','discount','delivery_fee','total']) row[key] = Number(body[key] ?? 0);\nreturn [{ json: row }];"
+        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst required = ['order_number','customer_name','customer_phone','delivery_address'];\nfor (const key of required) {\n  if (!body[key] || String(body[key]).trim() === '') throw new Error(`Missing required field: ${key}`);\n}\nconst fields = ['order_number','created_at','updated_at','customer_name','customer_email','customer_phone','delivery_address','landmark','branch_city','branch_area','branch_address','delivery_type','scheduled_at','payment_method','payment_status','order_status','receipt_number','items_json','status_history_json'];\nconst order = {};\nfor (const key of fields) order[key] = String(body[key] ?? '');\nfor (const key of ['subtotal','discount','delivery_fee','total']) order[key] = Number(body[key] ?? 0);\nlet items = [];\ntry { items = JSON.parse(String(order.items_json || '[]')); } catch (error) { items = []; }\nconst itemRows = items.map(item => `<li>${String(item.name ?? '')} × ${Number(item.qty ?? 1)} — ₱${Number(item.line_total ?? 0).toFixed(2)}</li>`).join('');\nconst html = `<div style=\"font-family:Arial,sans-serif;line-height:1.5\"><h2>Your FilipinOnly order was received</h2><p>Order <strong>${order.order_number}</strong> is now <strong>${order.order_status || 'Order received'}</strong>.</p><h3>Items</h3><ul>${itemRows || '<li>Items are shown on your receipt page.</li>'}</ul><p><strong>Total:</strong> ₱${order.total.toFixed(2)}</p><p><strong>Delivery:</strong> ${order.delivery_address}</p><p>Receipt: https://www.facebook.com/people/Filipinonly/61585837899219/</p></div>`;\nreturn [{ json: { ok: true, message: 'Receipt notification prepared from MySQL order data.', order_number: order.order_number, order, email: { to: order.customer_email, subject: `FilipinOnly receipt ${order.order_number}`, html } } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -30,46 +30,12 @@
         0
       ],
       "id": "5fb5c7d7-d3a2-4091-b3b1-9086442efee0",
-      "name": "Validate and Prepare Order"
-    },
-    {
-      "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "FilipinOnlyOrders",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "order_number",
-              "condition": "eq",
-              "keyValue": "={{ $json.order_number }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "autoMapInputData",
-          "value": {}
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -160,
-        0
-      ],
-      "id": "15c5a77d-960e-4f44-b315-73d59056c491",
-      "name": "Save Order to Data Table"
+      "name": "Prepare Receipt Email"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: true, message: 'Order saved in FilipinOnlyOrders.', order_number: $json.order_number } }}",
+        "responseBody": "={{ { ok: true, message: $json.message, order_number: $json.order_number, email: $json.email } }}",
         "options": {
           "responseCode": 200
         }
@@ -81,37 +47,26 @@
         0
       ],
       "id": "759c44c6-75ca-4ed5-a967-b043197f52c9",
-      "name": "Return Saved Order"
+      "name": "Return Notification Payload"
     }
   ],
   "connections": {
-    "Create Order Webhook": {
+    "Order Created Webhook": {
       "main": [
         [
           {
-            "node": "Validate and Prepare Order",
+            "node": "Prepare Receipt Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate and Prepare Order": {
+    "Prepare Receipt Email": {
       "main": [
         [
           {
-            "node": "Save Order to Data Table",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Order to Data Table": {
-      "main": [
-        [
-          {
-            "node": "Return Saved Order",
+            "node": "Return Notification Payload",
             "type": "main",
             "index": 0
           }

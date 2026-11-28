@@ -1,5 +1,5 @@
 {
-  "name": "FilipinOnly - 02 Get Order",
+  "name": "FilipinOnly - 02 Legacy Get Order (MySQL Source)",
   "nodes": [
     {
       "parameters": {
@@ -21,7 +21,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst order_number = String(body.order_number ?? '').trim().toUpperCase();\nif (!order_number) throw new Error('order_number is required');\nreturn [{ json: { order_number } }];"
+        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst order_number = String(body.order_number ?? '').trim().toUpperCase();\nreturn [{ json: { ok: false, order: null, message: 'MySQL is the source of truth. Read orders from PHP/MySQL instead of this n8n webhook.', order_number } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -30,45 +30,12 @@
         0
       ],
       "id": "9679d463-6c2c-483e-86a6-d578c00fd4fa",
-      "name": "Read Order Number"
-    },
-    {
-      "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "FilipinOnlyOrders",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "order_number",
-              "condition": "eq",
-              "keyValue": "={{ $json.order_number }}"
-            }
-          ]
-        },
-        "returnAll": false,
-        "limit": 1,
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -160,
-        0
-      ],
-      "id": "907cdc49-90f8-4158-98c2-0c2ded39e6ea",
-      "name": "Find Order",
-      "alwaysOutputData": true
+      "name": "MySQL Source Notice"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: $input.all().some(item => item.json.order_number), order: $input.all().find(item => item.json.order_number)?.json ?? null, message: $input.all().some(item => item.json.order_number) ? 'Order found.' : 'Order not found.' } }}",
+        "responseBody": "={{ { ok: false, order: null, message: $json.message, order_number: $json.order_number } }}",
         "options": {
           "responseCode": 200
         }
@@ -80,7 +47,7 @@
         0
       ],
       "id": "9ceafa6d-0d1d-47eb-a6c5-d56f4eb7796e",
-      "name": "Return Order"
+      "name": "Return MySQL Notice"
     }
   ],
   "connections": {
@@ -88,29 +55,18 @@
       "main": [
         [
           {
-            "node": "Read Order Number",
+            "node": "MySQL Source Notice",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Order Number": {
+    "MySQL Source Notice": {
       "main": [
         [
           {
-            "node": "Find Order",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Find Order": {
-      "main": [
-        [
-          {
-            "node": "Return Order",
+            "node": "Return MySQL Notice",
             "type": "main",
             "index": 0
           }

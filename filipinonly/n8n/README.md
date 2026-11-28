@@ -1,24 +1,32 @@
 # n8n setup for FilipinOnly
 
-1. Start n8n at `http://localhost:5678`.
-2. Create the **FilipinOnlyOrders** Data Table using `DATA_TABLE_SCHEMA.md`.
-3. Import all JSON files from `workflows/` using n8n's workflow import option.
-4. Open each imported workflow and confirm the Data Table node selects `FilipinOnlyOrders` by name. If your n8n version did not resolve the table automatically, re-select it from the Data Table dropdown.
-5. Save and activate all four workflows.
-6. In `config.php`, set `ORDER_STORAGE_MODE` to `n8n`.
-7. Keep `N8N_WEBHOOK_BASE` as `http://127.0.0.1:5678/webhook` when n8n is running on the same Windows PC as XAMPP. If using the test webhook URLs, change the base to `http://127.0.0.1:5678/webhook-test` while you test, then switch back and activate workflows for normal use.
+MySQL is the source of truth for users, orders, menu items, branches, vouchers, and admin accounts. n8n is used only for automation such as receipt and status messages.
+
+1. Set `DB_USER` and `DB_PASS` in `config.php`.
+2. Run `php database/migrate.php` from XAMPP PHP. This creates the `filipinonly` database, tables, seed rows, and imports existing JSON users/orders.
+3. Keep `ORDER_STORAGE_MODE` set to `mysql` in `config.php`.
+4. Start n8n at `http://localhost:5678`.
+5. Import all JSON files from `workflows/`.
+6. Activate `01-create-order.json` and `04-update-order-status.json`.
+7. Leave `02-get-order.json` and `03-list-orders.json` inactive; they are legacy notice workflows because MySQL now serves reads.
+8. Keep `N8N_WEBHOOK_BASE` as `http://127.0.0.1:5678/webhook` when n8n runs on the same Windows PC as XAMPP.
+9. Add an Email Send node after **Prepare Receipt Email** in `01-create-order.json` and after **Prepare Status Email** in `04-update-order-status.json`. Configure SMTP credentials in n8n and send to `email.to`, using `email.subject` and `email.html`.
 
 ## Included endpoints
 
-- `POST /webhook/filipinonly-order-create` — upsert a complete order by order number.
-- `POST /webhook/filipinonly-order-get` — look up one order.
-- `POST /webhook/filipinonly-order-list` — return all orders.
-- `POST /webhook/filipinonly-order-update` — update the order status and its history.
+- `POST /webhook/filipinonly-order-create` — receives the verified MySQL order and prepares a receipt email payload.
+- `POST /webhook/filipinonly-order-update` — receives the verified MySQL status update and prepares a status email payload.
+- `POST /webhook/filipinonly-order-get` — legacy notice only; do not activate for MySQL mode.
+- `POST /webhook/filipinonly-order-list` — legacy notice only; do not activate for MySQL mode.
 
-The PHP application calls these webhooks server-to-server, so browser CORS settings are not needed.
+The PHP application calls webhooks server-to-server, so browser CORS settings are not needed. Webhook failures do not roll back MySQL writes.
 
-## Notifications and AI
+## Tracking with MySQL
 
-The workflows persist orders and return the data needed by the website. For real email delivery, add an email node (SMTP credential) after the create/update Data Table node. For AI-written messages, add an AI Agent or a local Ollama HTTP Request node after the status update and feed it only the verified status and customer first name. Never let an AI model decide whether an order is paid or delivered.
+- PHP reads and writes `orders`, `order_items`, and `order_status_history` in MySQL.
+- The storefront **Track an order** form calls `track_order` in PHP, which reads the order directly from MySQL.
+- The staff dashboard calls `admin_update_status` in PHP, which writes `orders` and `order_status_history` in MySQL before notifying n8n.
+- Allowed statuses are `Order received`, `Preparing`, `On the way`, `Delivered`, and `Cancelled`; the storefront history groups them as `IN PROGRESS`, `DELIVERED`, and `CANCELLED`.
+- For AI-written messages, add an AI Agent or local Ollama HTTP Request node after the Prepare nodes and feed it only the verified status, order number, and customer first name. Never let an AI model decide whether an order is paid or delivered.
 
 The demo does not connect to real GCash/card payment services or live rider GPS. The receipt page can be printed or saved as PDF through the browser.

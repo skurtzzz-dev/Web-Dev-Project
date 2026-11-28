@@ -1,5 +1,5 @@
 {
-  "name": "FilipinOnly - 03 List Orders",
+  "name": "FilipinOnly - 03 Legacy List Orders (MySQL Source)",
   "nodes": [
     {
       "parameters": {
@@ -20,39 +20,22 @@
     },
     {
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "FilipinOnlyOrders",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "order_number",
-              "condition": "isNotEmpty"
-            }
-          ]
-        },
-        "returnAll": true,
-        "options": {}
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{ json: { ok: false, orders: [], message: 'MySQL is the source of truth. List orders from PHP/MySQL instead of this n8n webhook.' } }];"
       },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        -350,
+        -450,
         0
       ],
       "id": "f1d43442-a9f4-42cb-ae02-792604dcb788",
-      "name": "Get All Orders",
-      "alwaysOutputData": true
+      "name": "MySQL Source Notice"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: true, orders: $input.all().filter(item => item.json.order_number).map(item => item.json) } }}",
+        "responseBody": "={{ { ok: false, orders: [], message: $json.message } }}",
         "options": {
           "responseCode": 200
         }
@@ -60,11 +43,11 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        0,
+        120,
         0
       ],
       "id": "467fa710-91a7-4403-a513-81a59a8f7636",
-      "name": "Return Orders"
+      "name": "Return MySQL Notice"
     }
   ],
   "connections": {
@@ -72,18 +55,18 @@
       "main": [
         [
           {
-            "node": "Get All Orders",
+            "node": "MySQL Source Notice",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get All Orders": {
+    "MySQL Source Notice": {
       "main": [
         [
           {
-            "node": "Return Orders",
+            "node": "Return MySQL Notice",
             "type": "main",
             "index": 0
           }

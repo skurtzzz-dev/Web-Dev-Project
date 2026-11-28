@@ -1,5 +1,5 @@
 {
-  "name": "FilipinOnly - 04 Update Order Status",
+  "name": "FilipinOnly - 04 Order Status Notification",
   "nodes": [
     {
       "parameters": {
@@ -15,13 +15,13 @@
         0
       ],
       "id": "3c07c7b8-c016-4aa2-9ff7-32efe72afe52",
-      "name": "Update Order Status Webhook",
+      "name": "Order Status Webhook",
       "webhookId": "01f03754-a729-465b-a62d-d59627739166"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst order_number = String(body.order_number ?? '').trim().toUpperCase();\nconst order_status = String(body.order_status ?? '').trim();\nconst allowed = ['Order received','Preparing','On the way','Delivered'];\nif (!order_number) throw new Error('order_number is required');\nif (!allowed.includes(order_status)) throw new Error('Invalid order_status');\nreturn [{ json: {\n  order_number,\n  order_status,\n  updated_at: String(body.updated_at ?? new Date().toISOString()),\n  status_history_json: String(body.status_history_json ?? '[]')\n} }];"
+        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? input;\nconst order_number = String(body.order_number ?? '').trim().toUpperCase();\nconst order_status = String(body.order_status ?? '').trim();\nconst allowed = ['Order received','Preparing','On the way','Delivered','Cancelled'];\nif (!order_number) throw new Error('order_number is required');\nif (!allowed.includes(order_status)) throw new Error('Invalid order_status');\nconst to = String(body.customer_email ?? '');\nconst subject = order_status === 'Cancelled' ? `FilipinOnly order ${order_number} was cancelled` : `FilipinOnly order ${order_number} is ${order_status}`;\nconst message = order_status === 'Delivered' ? 'Your order has been delivered. Thank you for ordering with FilipinOnly.' : order_status === 'Cancelled' ? 'Your order was cancelled. Contact the store if you need help.' : `Your order is now ${order_status}. We will keep you updated.`;\nconst html = `<div style=\"font-family:Arial,sans-serif;line-height:1.5\"><h2>Order ${order_number}</h2><p>${message}</p><p><strong>Status:</strong> ${order_status}</p></div>`;\nreturn [{ json: { ok: true, message: 'Status notification prepared from MySQL order data.', order_number, order_status, email: { to, subject, html } } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -30,47 +30,12 @@
         0
       ],
       "id": "8c3841cb-1978-4012-b6c4-9a90f8d11dcb",
-      "name": "Validate Status Update"
-    },
-    {
-      "parameters": {
-        "resource": "row",
-        "operation": "update",
-        "dataTableId": {
-          "__rl": true,
-          "value": "FilipinOnlyOrders",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "order_number",
-              "condition": "eq",
-              "keyValue": "={{ $json.order_number }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "autoMapInputData",
-          "value": {}
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -160,
-        0
-      ],
-      "id": "ff4edb2a-d6d8-4bee-9829-26b18b61af11",
-      "name": "Update Order Row",
-      "alwaysOutputData": true
+      "name": "Prepare Status Email"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: $input.all().some(item => item.json.order_number), message: $input.all().some(item => item.json.order_number) ? 'Order status updated.' : 'Order number was not found.' } }}",
+        "responseBody": "={{ { ok: true, message: $json.message, order_number: $json.order_number, order_status: $json.order_status, email: $json.email } }}",
         "options": {
           "responseCode": 200
         }
@@ -82,37 +47,26 @@
         0
       ],
       "id": "0c04709f-de4f-46b5-905c-dfe0d661c1b3",
-      "name": "Return Status Update"
+      "name": "Return Notification Payload"
     }
   ],
   "connections": {
-    "Update Order Status Webhook": {
+    "Order Status Webhook": {
       "main": [
         [
           {
-            "node": "Validate Status Update",
+            "node": "Prepare Status Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate Status Update": {
+    "Prepare Status Email": {
       "main": [
         [
           {
-            "node": "Update Order Row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update Order Row": {
-      "main": [
-        [
-          {
-            "node": "Return Status Update",
+            "node": "Return Notification Payload",
             "type": "main",
             "index": 0
           }

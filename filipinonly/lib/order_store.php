@@ -1,6 +1,39 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/mysql_store.php';
+
+function branches_catalog(): array {
+    static $branches = null;
+    if ($branches === null) {
+        $loaded = require __DIR__ . '/../data/branches.php';
+        $branches = is_array($loaded) ? $loaded : [];
+    }
+    return $branches;
+}
+
+function branch_for_city(string $city): array {
+    $branches = branches_catalog();
+    $wanted = strtolower(trim($city));
+    foreach ($branches as $branch) {
+        if (strtolower(trim((string)($branch['city'] ?? ''))) === $wanted) return $branch;
+    }
+    foreach ($branches as $branch) {
+        if (strtolower(trim((string)($branch['city'] ?? ''))) === 'quezon city') return $branch;
+    }
+    return $branches[0] ?? ['city' => 'Quezon City', 'area' => 'Cubao', 'address' => '18 General Roxas Ave, Cubao, Quezon City', 'hours' => '9 AM – 9 PM'];
+}
+
+function branch_for_order(array $order): array {
+    $branchCity = trim((string)($order['branch_city'] ?? ''));
+    if ($branchCity !== '') return branch_for_city($branchCity);
+    return branch_for_city((string)($order['city'] ?? ''));
+}
+
+function branch_label(array $branch): string {
+    return trim((string)($branch['area'] ?? '') . ' branch · ' . (string)($branch['address'] ?? ''), " ·");
+}
 
 function read_local_orders(): array {
     $file = LOCAL_ORDER_FILE;
@@ -18,7 +51,7 @@ function write_local_orders(array $orders): bool {
     return file_put_contents($file, $json, LOCK_EX) !== false;
 }
 
-function n8n_post(string $path, array $payload): array {
+function n8n_post(string $path, array $payload, int $timeout = N8N_HTTP_TIMEOUT): array {
     $url = rtrim(N8N_WEBHOOK_BASE, '/') . '/' . ltrim($path, '/');
     $headers = ["Content-Type: application/json", "Accept: application/json"];
     $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -32,7 +65,7 @@ function n8n_post(string $path, array $payload): array {
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => N8N_HTTP_TIMEOUT,
+            CURLOPT_TIMEOUT => $timeout,
         ]);
         $responseBody = curl_exec($ch);
         $error = curl_error($ch);
@@ -44,7 +77,7 @@ function n8n_post(string $path, array $payload): array {
             'method' => 'POST',
             'header' => implode("\r\n", $headers),
             'content' => $body,
-            'timeout' => N8N_HTTP_TIMEOUT,
+            'timeout' => $timeout,
             'ignore_errors' => true,
         ]]);
         $responseBody = @file_get_contents($url, false, $context);
@@ -64,6 +97,12 @@ function n8n_post(string $path, array $payload): array {
     return $data;
 }
 
+function n8n_notify(string $path, array $payload): bool {
+    if (N8N_WEBHOOK_BASE === '') return false;
+    $result = n8n_post($path, $payload, 3);
+    return ($result['ok'] ?? false) === true;
+}
+
 function order_to_n8n_row(array $order): array {
     return [
         'order_number' => (string)($order['id'] ?? ''),
@@ -74,6 +113,9 @@ function order_to_n8n_row(array $order): array {
         'customer_phone' => (string)($order['phone'] ?? ''),
         'delivery_address' => (string)($order['address'] ?? ''),
         'landmark' => (string)($order['landmark'] ?? ''),
+        'branch_city' => (string)($order['branch_city'] ?? ''),
+        'branch_area' => (string)($order['branch_area'] ?? ''),
+        'branch_address' => (string)($order['branch_address'] ?? ''),
         'delivery_type' => (string)($order['delivery'] ?? 'ASAP'),
         'scheduled_at' => (string)($order['schedule'] ?? ''),
         'payment_method' => (string)($order['payment'] ?? 'Cash on Delivery'),
@@ -102,8 +144,12 @@ function n8n_row_to_order(array $row): array {
         'phone' => (string)($row['customer_phone'] ?? ''),
         'address' => (string)($row['delivery_address'] ?? ''),
         'landmark' => (string)($row['landmark'] ?? ''),
+        'branch_city' => (string)($row['branch_city'] ?? ''),
+        'branch_area' => (string)($row['branch_area'] ?? ''),
+        'branch_address' => (string)($row['branch_address'] ?? ''),
         'delivery' => (string)($row['delivery_type'] ?? 'ASAP'),
         'schedule' => (string)($row['scheduled_at'] ?? ''),
+        'eta' => ($row['delivery_type'] ?? 'ASAP') === 'Scheduled' ? (string)($row['scheduled_at'] ?? '') : '30–45 minutes',
         'payment' => (string)($row['payment_method'] ?? ''),
         'payment_status' => (string)($row['payment_status'] ?? 'Pending - demonstration only'),
         'status' => (string)($row['order_status'] ?? 'Order received'),
@@ -117,6 +163,12 @@ function n8n_row_to_order(array $row): array {
 }
 
 function save_order(array $order): array {
+    if (ORDER_STORAGE_MODE === 'mysql') {
+        $saved = mysql_save_order($order);
+        if (!$saved['ok']) return $saved;
+        n8n_notify('filipinonly-order-create', order_to_n8n_row($saved['order'] ?? $order));
+        return $saved;
+    }
     if (ORDER_STORAGE_MODE === 'n8n') {
         $result = n8n_post('filipinonly-order-create', order_to_n8n_row($order));
         if (!$result['ok']) return $result;
@@ -131,6 +183,7 @@ function save_order(array $order): array {
 function find_order(string $orderNumber): ?array {
     $orderNumber = strtoupper(trim($orderNumber));
     if ($orderNumber === '') return null;
+    if (ORDER_STORAGE_MODE === 'mysql') return mysql_find_order($orderNumber);
     if (ORDER_STORAGE_MODE === 'n8n') {
         $result = n8n_post('filipinonly-order-get', ['order_number' => $orderNumber]);
         if (!$result['ok']) throw new RuntimeException($result['message']);
@@ -142,7 +195,9 @@ function find_order(string $orderNumber): ?array {
 }
 
 function all_orders(): array {
-    if (ORDER_STORAGE_MODE === 'n8n') {
+    if (ORDER_STORAGE_MODE === 'mysql') {
+        $orders = mysql_all_orders();
+    } elseif (ORDER_STORAGE_MODE === 'n8n') {
         $result = n8n_post('filipinonly-order-list', []);
         if (!$result['ok']) throw new RuntimeException($result['message']);
         $rows = $result['orders'] ?? [];
@@ -156,13 +211,19 @@ function all_orders(): array {
 }
 
 function update_order_status(string $orderNumber, string $status): array {
-    $allowed = ['Order received', 'Preparing', 'On the way', 'Delivered'];
+    $allowed = ['Order received', 'Preparing', 'On the way', 'Delivered', 'Cancelled'];
     if (!in_array($status, $allowed, true)) return ['ok' => false, 'message' => 'Invalid order status.'];
+    if (ORDER_STORAGE_MODE === 'mysql') {
+        $result = mysql_update_order_status($orderNumber, $status);
+        if ($result['ok']) n8n_notify('filipinonly-order-update', order_to_n8n_row($result['order']));
+        return $result;
+    }
     $order = find_order($orderNumber);
     if (!$order) return ['ok' => false, 'message' => 'Order not found.'];
     $now = date(DATE_ATOM);
     $order['status'] = $status;
     $order['updated_at'] = $now;
+    if ($status === 'Delivered' && empty($order['delivered_at'])) $order['delivered_at'] = $now;
     $order['status_history'] = $order['status_history'] ?? [];
     $order['status_history'][] = ['status' => $status, 'updated_at' => $now];
 
