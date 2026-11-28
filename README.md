@@ -24,11 +24,13 @@ No Composer package installation is required.
 
 ## 2. Copy the project to the new device
 
-1. Copy the whole `filipinonly` folder to XAMPP's `htdocs` folder:
+1. Copy the whole `filipinonly` folder to the new device's XAMPP `htdocs` folder:
 
    ```text
    C:\xampp\htdocs\filipinonly
    ```
+
+   Replace `C:\xampp` with your actual XAMPP install path. If XAMPP is on drive `D:`, use `D:\xampp` everywhere in this guide.
 
 2. Keep the folder name exactly `filipinonly`.
 
@@ -49,6 +51,23 @@ No Composer package installation is required.
    C:\xampp\htdocs\filipinonly\lib\order_store.php
    ```
 
+### New-device checklist
+
+```text
+[ ] Install XAMPP with Apache, MySQL/MariaDB, and PHP.
+[ ] Copy the filipinonly folder into htdocs.
+[ ] Start Apache and MySQL.
+[ ] Open http://localhost/phpmyadmin/index.php.
+[ ] Confirm the MySQL root password on that device.
+[ ] Set DB_USER and DB_PASS in config.php.
+[ ] Set the same password in phpMyAdmin config or login form.
+[ ] Run database\migrate.php using that device's PHP path.
+[ ] Open http://localhost/filipinonly/index.php.
+[ ] Open the API state link and confirm storage_mode is mysql.
+```
+
+Do not run the migration until the phpMyAdmin login and `config.php` match.
+
 ---
 
 ## 3. Start XAMPP
@@ -68,7 +87,7 @@ If Apache or MySQL fails to start:
 
 ## 4. Set the MySQL password in `config.php`
 
-Open:
+Open, replacing `C:\xampp` with your real XAMPP path:
 
 ```text
 C:\xampp\htdocs\filipinonly\config.php
@@ -81,11 +100,19 @@ define('DB_HOST', '127.0.0.1');
 define('DB_PORT', 3306);
 define('DB_NAME', 'filipinonly');
 define('DB_USER', 'root');
-define('DB_PASS', 'filipinonly-db-2026');
+define('DB_PASS', 'root1234');
 define('DB_CHARSET', 'utf8mb4');
 ```
 
 Set `DB_USER` and `DB_PASS` to the MySQL login that works on the new device.
+
+### Check the new device first
+
+1. Open `http://localhost/phpmyadmin/index.php`.
+2. Try `root` with a blank password.
+3. If that fails, try the password used on that device.
+4. The password `root1234` is only for the current lab computer. Do not assume it works on another device.
+5. If you copied this project from the lab computer, `config.php` still contains `root1234`; edit it before continuing.
 
 ### Common cases
 
@@ -105,29 +132,38 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 ```
 
-**Current development machine:**
+**Current lab computer only:**
 
-The existing setup uses:
+The lab computer uses:
 
 ```text
 Username: root
-Password: filipinonly-db-2026
+Password: root1234
 ```
 
 So use:
 
 ```php
 define('DB_USER', 'root');
-define('DB_PASS', 'filipinonly-db-2026');
+define('DB_PASS', 'root1234');
 ```
 
-Do not run the migration until this login is correct.
+**Custom password:**
+
+If you set your own MySQL root password, use that exact password:
+
+```php
+define('DB_USER', 'root');
+define('DB_PASS', 'your-password-here');
+```
+
+Do not run the migration until phpMyAdmin and `config.php` use the same working login.
 
 ---
 
 ## 5. Make phpMyAdmin use the same MySQL login
 
-Open:
+Open, replacing `C:\xampp` with your real XAMPP path:
 
 ```text
 C:\xampp\phpMyAdmin\config.inc.php
@@ -141,7 +177,7 @@ $cfg['Servers'][$i]['user'] = 'root';
 $cfg['Servers'][$i]['password'] = '';
 ```
 
-Set the password to match `DB_PASS` in `config.php`.
+If `auth_type` is `config`, set the password to match `DB_PASS` in `config.php`.
 
 For fresh XAMPP:
 
@@ -149,11 +185,13 @@ For fresh XAMPP:
 $cfg['Servers'][$i]['password'] = '';
 ```
 
-For the current development machine:
+For the current lab computer only:
 
 ```php
-$cfg['Servers'][$i]['password'] = 'filipinonly-db-2026';
+$cfg['Servers'][$i]['password'] = 'root1234';
 ```
+
+For a custom password, use that exact password.
 
 Save the file, then open:
 
@@ -161,19 +199,26 @@ Save the file, then open:
 http://localhost/phpmyadmin/index.php
 ```
 
-It should open without showing a login form.
+If `auth_type` is `config`, it should open without showing a login form.
 
-If it still shows a login form, use the same `DB_USER` and `DB_PASS` values.
+If it still shows a login form, leave `auth_type` as `cookie` and use the same `DB_USER` and `DB_PASS` values in the form.
 
 ---
 
 ## 6. Run the database migration
 
-Open PowerShell:
+Open PowerShell, replacing `C:\xampp` with your real XAMPP path:
 
 ```powershell
 cd C:\xampp\htdocs\filipinonly
 C:\xampp\php\php.exe database\migrate.php
+```
+
+If XAMPP is installed on drive `D:`, use:
+
+```powershell
+cd D:\xampp\htdocs\filipinonly
+D:\xampp\php\php.exe database\migrate.php
 ```
 
 Expected output:
@@ -231,8 +276,10 @@ n8n:         http://localhost:5678
 Open the API state link. It should show:
 
 ```json
-"storage": "mysql"
+"storage_mode": "mysql"
 ```
+
+If it shows `local`, `config.php` still has `ORDER_STORAGE_MODE` set incorrectly.
 
 ---
 
@@ -401,7 +448,7 @@ Passwords are stored as `password_hash`, never as plain text.
 
 ## 13. Optional: n8n receipt email integration
 
-FilipinOnly works without n8n. MySQL writes are not rolled back if n8n is offline.
+FilipinOnly works without n8n. MySQL writes are not rolled back if n8n is offline. On a new device, you can skip this entire section unless you want receipt/status emails.
 
 To enable receipt automation:
 
@@ -513,19 +560,30 @@ Fix:
 
 ### Website says `Database connection failed`
 
-Cause: MySQL is not running or `config.php` has the wrong login.
+Cause: MySQL is not running, `config.php` has the wrong login, or the project was copied from another device with the old password.
 
 Fix:
 
 1. Start MySQL in XAMPP.
-2. Check `DB_USER` and `DB_PASS` in `config.php`.
-3. Rerun:
+2. Open phpMyAdmin and confirm which password works on that device.
+3. Check `DB_USER` and `DB_PASS` in `config.php`.
+4. Use blank password on fresh XAMPP, or `root1234` only on the lab computer.
+5. Rerun, replacing `C:\xampp` with your real XAMPP path:
 
    ```powershell
    C:\xampp\php\php.exe database\migrate.php
    ```
 
-### API state does not show `storage: mysql`
+### Commands say file not found
+
+Cause: the README examples use `C:\xampp`, but XAMPP is installed elsewhere.
+
+Fix:
+
+- Replace `C:\xampp` with your real XAMPP install path, such as `D:\xampp`.
+- Run the command from the `filipinonly` project folder.
+
+### API state does not show `storage_mode: mysql`
 
 Fix:
 
@@ -535,6 +593,14 @@ Fix:
    ```php
    define('ORDER_STORAGE_MODE', 'mysql');
    ```
+
+3. Save the file and reload:
+
+   ```text
+   http://localhost/filipinonly/api.php?action=state
+   ```
+
+4. The correct key is `storage_mode`, not `storage`.
 
 ### n8n webhook does not respond
 
